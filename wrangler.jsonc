@@ -43,7 +43,7 @@
     "TIME_ZONE": "Europe/London",
     // Optional: comma-separated Renpho account emails allowed to connect.
     // Leave empty to allow any Renpho account to connect to this deployment.
-    "ALLOWED_EMAILS": "v66smnfzks@privaterelay.appleid.com"
+    "ALLOWED_EMAILS": ""
   }
   // Secrets (set via `wrangler secret put`):
   //   SESSION_ENCRYPTION_KEY   (any long random string — seals everything stored in RENPHO_CACHE)
