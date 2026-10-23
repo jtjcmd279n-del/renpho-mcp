@@ -7,8 +7,11 @@
  *   - Every request is `POST { encryptData: base64(AES-128-ECB(json)) }`.
  *   - Every response is `{ code, msg, data }` with `data` encrypted the same
  *     way; `code === 101` means success.
+ *   - Every request — login included — carries `appVersion` and `platform`
+ *     headers; since Oct 2026 a login without them is rejected with code -114
+ *     ("decryption failed") even though the payload itself is fine.
  *   - Login returns a bearer `token` (+ `expAt`) that goes in a `token` header
- *     alongside `userId`, `appVersion` and `platform`.
+ *     alongside `userId`.
  *   - `device/count` lists the per-device data tables; scale measurements are
  *     then paged out of `scale/queryAllMeasureDataList` per table.
  *
@@ -52,7 +55,13 @@ const ENDPOINT_PATH: Record<MeasurementEndpoint, string> = {
 export const ENDPOINT_TAG = "__endpoint";
 
 const APP_VERSION = "7.0.0";
-const PLATFORM = "android";
+/**
+ * Not "android"/"ios": Renpho appears to allow one session per platform, and
+ * claiming the phone app's platform signed the user's phone out on every login.
+ */
+const PLATFORM = "web";
+/** Headers the app sends on every request, authenticated or not. */
+const APP_HEADERS = { appVersion: APP_VERSION, platform: PLATFORM } as const;
 
 /** Records per page requested from queryAllMeasureDataList. */
 export const PAGE_SIZE = 200;
@@ -168,6 +177,8 @@ export interface DeviceInfo {
 interface Envelope {
   code: number;
   msg?: string;
+  /** Some errors (e.g. -114) carry their text here instead of `msg`. */
+  message?: string;
   data?: string | null;
 }
 
@@ -418,7 +429,7 @@ export class RenphoClient {
     const env = await this.postEnvelope(ENDPOINTS.login, renphoEncrypt(JSON.stringify(loginData)), {});
     if (env.code !== 101) {
       throw new RenphoAuthError(
-        `Renpho login failed: ${describeCode(env.code, env.msg)}`,
+        `Renpho login failed: ${describeCode(env.code, env.msg ?? env.message)}`,
         env.code,
       );
     }
@@ -461,8 +472,6 @@ export class RenphoClient {
     return {
       token: session.token,
       userId: session.userId,
-      appVersion: APP_VERSION,
-      platform: PLATFORM,
     };
   }
 
@@ -477,7 +486,7 @@ export class RenphoClient {
     try {
       res = await this.fetchImpl(`${API_BASE}/${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", ...headers },
+        headers: { "Content-Type": "application/json", Accept: "application/json", ...APP_HEADERS, ...headers },
         body: JSON.stringify({ encryptData }),
       });
     } catch (err) {
@@ -549,7 +558,7 @@ export class RenphoClient {
       return this.callRaw(path, body, opts, true);
     }
     if (env.code !== 101) {
-      throw new RenphoApiError(`Renpho ${path} failed: ${describeCode(env.code, env.msg)}`, env.code, undefined, path);
+      throw new RenphoApiError(`Renpho ${path} failed: ${describeCode(env.code, env.msg ?? env.message)}`, env.code, undefined, path);
     }
     if (!env.data) return "null";
     return renphoDecrypt(env.data);
