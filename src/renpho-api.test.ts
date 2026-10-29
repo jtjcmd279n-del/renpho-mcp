@@ -72,6 +72,9 @@ function makeFake(opts: FakeOptions) {
     const plain = renphoDecrypt(body.encryptData);
     const req = plain === "" ? {} : (JSON.parse(plain) as Record<string, any>);
 
+    // Mirrors the live server since Oct 2026: no app headers → "decryption failed".
+    if (headers.appVersion !== "7.0.0" || !headers.platform) return envelope(-114);
+
     if (path === ENDPOINTS.login) {
       state.logins++;
       if (req.login?.password !== password) return envelope(20001);

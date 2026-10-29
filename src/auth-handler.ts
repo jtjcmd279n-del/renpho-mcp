@@ -150,7 +150,10 @@ app.post("/authorize", async (c) => {
   }
 
   const userHash = await sha256Hex(email);
-  const probe = new RenphoClient({ email, password, userHash }); // no cache: a real login, every time
+  // A real login every time (force below), but its session is sealed into the cache so the
+  // MCP object reuses it — Renpho allows one session per account, and each login signs the
+  // phone app out.
+  const probe = new RenphoClient({ email, password, userHash, cache: c.env.RENPHO_CACHE, sealSecret: c.env.SESSION_ENCRYPTION_KEY });
   let userId: string;
   try {
     userId = (await probe.getSession(true)).userId;
